@@ -11,6 +11,7 @@ class Settings:
     rpc_cookie_path: Path
     rpc_disable_cookie_auth: bool
     solver_bin: str
+    cuda_solver_bin: str
 
 
 def load_settings() -> Settings:
@@ -22,4 +23,5 @@ def load_settings() -> Settings:
         ),
         rpc_disable_cookie_auth=os.environ.get("ZCASH_RPC_DISABLE_COOKIE_AUTH", "0") in {"1", "true", "TRUE", "yes"},
         solver_bin=os.environ.get("ZCASH_SOLVER_BIN", "./solver/target/release/zk_equihash_solver"),
+        cuda_solver_bin=os.environ.get("ZCASH_CUDA_SOLVER_BIN", "./cuda/build/zk_cuda_worker"),
     )
