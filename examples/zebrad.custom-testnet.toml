@@ -1,0 +1,20 @@
+[mining]
+miner_address = 't27eWDgjFYJGVXmzrXeVjnb5J3uXDM9xH9v'
+
+[network]
+network = "Testnet"
+initial_testnet_peers = []
+
+[network.testnet_parameters]
+network_name = "ConfiguredTestnet_1"
+network_magic = [0, 1, 0, 255]
+slow_start_interval = 0
+target_difficulty_limit = "0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f"
+disable_pow = true
+
+[network.testnet_parameters.activation_heights]
+NU6 = 1
+
+[rpc]
+listen_addr = "127.0.0.1:18232"
+enable_cookie_auth = false

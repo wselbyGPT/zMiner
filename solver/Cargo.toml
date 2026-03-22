@@ -1,0 +1,11 @@
+[package]
+name = "zk_equihash_solver"
+version = "0.2.0"
+edition = "2021"
+
+[dependencies]
+equihash = { version = "0.2.2", features = ["solver"] }
+hex = "0.4"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
