@@ -20,6 +20,8 @@ struct SolverRequest {
     #[serde(default)]
     max_nonces: Option<u64>,
     #[serde(default)]
+    max_solutions: Option<u64>,
+    #[serde(default)]
     require_target: Option<bool>,
     #[serde(default)]
     start_nonce_hex: Option<String>,
@@ -32,6 +34,16 @@ struct TemplateSummary {
     previousblockhash: Option<String>,
     bits: Option<String>,
     curtime: Option<u64>,
+}
+
+#[derive(Debug, Serialize, Clone)]
+struct SolverCandidate {
+    nonce32_hex: String,
+    solution_hex: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pow_hash_hex: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    target_met: Option<bool>,
 }
 
 #[derive(Debug, Serialize)]
@@ -49,6 +61,8 @@ struct SolverResponse {
     checked_nonces: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     target_met: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    candidates: Option<Vec<SolverCandidate>>,
 }
 
 fn main() {
@@ -85,6 +99,7 @@ fn main() {
             pow_hash_hex: None,
             checked_nonces: Some(0),
             target_met: None,
+            candidates: None,
         }),
         "dummy" => {
             let nonce = vec![0u8; NONCE_SIZE];
@@ -99,9 +114,11 @@ fn main() {
                 pow_hash_hex: None,
                 checked_nonces: Some(1),
                 target_met: Some(false),
+                candidates: None,
             })
         }
         "real" => emit(solve_real(&req)),
+        "real_batch" => emit(solve_real_batch(&req)),
         other => emit_error(format!("unsupported solver mode: {other}")),
     }
 }
@@ -158,6 +175,7 @@ fn solve_real(req: &SolverRequest) -> SolverResponse {
                     pow_hash_hex: Some(hex_encode(pow_hash_rpc)),
                     checked_nonces: Some(checked + 1),
                     target_met: Some(meets_target),
+                    candidates: None,
                 };
             }
         }
@@ -171,6 +189,7 @@ fn solve_real(req: &SolverRequest) -> SolverResponse {
                 pow_hash_hex: None,
                 checked_nonces: Some(checked + 1),
                 target_met: None,
+                candidates: None,
             };
         }
     }
@@ -183,6 +202,126 @@ fn solve_real(req: &SolverRequest) -> SolverResponse {
         pow_hash_hex: None,
         checked_nonces: Some(max_nonces),
         target_met: None,
+        candidates: None,
+    }
+}
+
+fn solve_real_batch(req: &SolverRequest) -> SolverResponse {
+    let pow_input = match parse_fixed_hex(req.pow_input_hex.as_deref(), POW_INPUT_SIZE, "pow_input_hex") {
+        Ok(v) => v,
+        Err(message) => return error_response(message),
+    };
+    let target = match parse_fixed_hex(req.target_hex.as_deref(), 32, "target_hex") {
+        Ok(v) => v,
+        Err(message) => return error_response(message),
+    };
+    let require_target = req.require_target.unwrap_or(false);
+    let max_nonces = req.max_nonces.unwrap_or(64);
+    let max_solutions = req.max_solutions.unwrap_or(8);
+    let mut nonce = match parse_nonce(req.start_nonce_hex.as_deref()) {
+        Ok(v) => v,
+        Err(message) => return error_response(message),
+    };
+
+    let mut candidates: Vec<SolverCandidate> = Vec::new();
+
+    for checked in 0..max_nonces {
+        let this_nonce = nonce;
+        let mut emitted = false;
+        let solutions = solve_200_9(&pow_input, || {
+            if emitted {
+                None
+            } else {
+                emitted = true;
+                Some(this_nonce)
+            }
+        });
+
+        for solution in solutions {
+            if is_valid_solution(200, 9, &pow_input, &this_nonce, &solution).is_err() {
+                continue;
+            }
+
+            let header = build_header(&pow_input, &this_nonce, &solution);
+            let pow_hash = sha256d(&header);
+            let meets_target = hash_meets_target(&pow_hash, &target);
+
+            if require_target && !meets_target {
+                continue;
+            }
+
+            let mut pow_hash_rpc = pow_hash;
+            pow_hash_rpc.reverse();
+            candidates.push(SolverCandidate {
+                nonce32_hex: hex_encode(this_nonce),
+                solution_hex: hex_encode(solution),
+                pow_hash_hex: Some(hex_encode(pow_hash_rpc)),
+                target_met: Some(meets_target),
+            });
+
+            if candidates.len() as u64 >= max_solutions {
+                return SolverResponse {
+                    status: "ok".into(),
+                    message: Some("collected batch of valid Equihash solutions".into()),
+                    nonce32_hex: None,
+                    solution_hex: None,
+                    pow_hash_hex: None,
+                    checked_nonces: Some(checked + 1),
+                    target_met: None,
+                    candidates: Some(candidates),
+                };
+            }
+        }
+
+        if !increment_nonce_le(&mut nonce) {
+            return if candidates.is_empty() {
+                SolverResponse {
+                    status: "no_solution".into(),
+                    message: Some("nonce space exhausted".into()),
+                    nonce32_hex: None,
+                    solution_hex: None,
+                    pow_hash_hex: None,
+                    checked_nonces: Some(checked + 1),
+                    target_met: None,
+                    candidates: None,
+                }
+            } else {
+                SolverResponse {
+                    status: "ok".into(),
+                    message: Some("nonce space exhausted after collecting some valid Equihash solutions".into()),
+                    nonce32_hex: None,
+                    solution_hex: None,
+                    pow_hash_hex: None,
+                    checked_nonces: Some(checked + 1),
+                    target_met: None,
+                    candidates: Some(candidates),
+                }
+            };
+        }
+    }
+
+    if candidates.is_empty() {
+        SolverResponse {
+            status: "no_solution".into(),
+            message: Some("no valid Equihash solutions found in requested nonce window".into()),
+            nonce32_hex: None,
+            solution_hex: None,
+            pow_hash_hex: None,
+            checked_nonces: Some(max_nonces),
+            target_met: None,
+            candidates: None,
+        }
+    } else {
+        SolverResponse {
+            status: "ok".into(),
+            message: Some("collected valid Equihash solutions in requested nonce window".into()),
+            nonce32_hex: None,
+            solution_hex: None,
+            pow_hash_hex: None,
+            checked_nonces: Some(max_nonces),
+            target_met: None,
+            candidates: Some(candidates),
+        }
     }
 }
 
@@ -278,6 +417,7 @@ fn error_response(message: String) -> SolverResponse {
         pow_hash_hex: None,
         checked_nonces: None,
         target_met: None,
+        candidates: None,
     }
 }
 
