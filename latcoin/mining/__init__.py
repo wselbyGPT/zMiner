@@ -1,0 +1,1 @@
+"""LatCoin mining helpers."""

@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "latcoin"
+version = "0.1.0"
+description = "LatCoin: a toy post-quantum cryptocurrency stack"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+test = ["pytest>=8"]
+
+[project.scripts]
+lat = "latcoin.cli.main:main"
+lat-node = "latcoin.cli.main:main_node"
+lat-wallet = "latcoin.cli.main:main_wallet"
+lat-miner = "latcoin.cli.main:main_miner"
+lat-rpc = "latcoin.cli.main:main_rpc"
+
+[tool.setuptools]
+packages = [
+    "latcoin",
+    "latcoin.chain",
+    "latcoin.cli",
+    "latcoin.codec",
+    "latcoin.crypto",
+    "latcoin.mining",
+    "latcoin.net",
+    "latcoin.node",
+    "latcoin.validation",
+    "latcoin.wallet",
+]
+package-dir = {"latcoin" = ""}
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+pythonpath = [".."]
+asyncio_mode = "auto"
+addopts = ["-ra", "--strict-markers", "--strict-config"]

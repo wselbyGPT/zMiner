@@ -1,0 +1,5 @@
+[console_scripts]
+lat = latcoin.cli.main:main
+lat-miner = latcoin.cli.main:main_miner
+lat-node = latcoin.cli.main:main_node
+lat-wallet = latcoin.cli.main:main_wallet

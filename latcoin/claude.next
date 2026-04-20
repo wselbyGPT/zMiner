@@ -1,0 +1,12 @@
+ lat rpc <method> [params] CLI command — right now every wallet/status command reads JSON files directly. Once a
+  node is running, you want to talk to it via its HTTP RPC instead of poking at disk. One cmd_rpc_call that POSTs to
+  localhost:9338/rpc covers all existing facade methods without new code.
+  2. Seed peer list / DNS bootstrap — --peer HOST:PORT works, but a fresh node with an empty peers.json and no seeds is
+  isolated. Even a hardcoded DEVNET_SEEDS = [("127.0.0.1", 9337)] in node/node.py that gets loaded into the addr manager
+   on first boot gives you a working local two-node setup without requiring manual flags.
+  3. lat node status reading from the live RPC — cmd_node_status still reads JSON files directly. After the node
+  refactor it should query the running process via GET /status so the numbers reflect in-memory state (mempool, actual
+  tip) rather than the last flush.
+  4. Two-node IBD smoke test — mine 10 blocks on node A, start node B pointing at A, verify B syncs to height 9. This is
+   what validates that the chain engine + P2P relay + addr manager all actually work end-to-end, and it will surface any
+   bugs before they get buried.
